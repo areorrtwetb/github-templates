@@ -1,0 +1,40 @@
+name: Terraform Shared Action
+
+on:
+  workflow_call:
+    inputs:
+      terraform_mode:
+        default: plan
+        description: Mode to invoke Terraform
+        type: string
+
+jobs:
+  Terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.5
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -no-color -input=false -out=./plan.tmp
+        continue-on-error: true
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' || inputs.terraform_mode == 'apply'
+        run: terraform apply -auto-approve ./plan.tmp
