@@ -165,9 +165,11 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
+        working-directory: ${{ env.env_folder_exists == 'true' && matrix.deploy_environment || '.' }}
         id: plan
         run: terraform plan -no-color -input=false -out=./plan.tmp
 
       - name: Terraform Apply
         if: inputs.terraform_mode == 'apply'
+        working-directory: ${{ env.env_folder_exists == 'true' && matrix.deploy_environment || '.' }}
         run: terraform apply -auto-approve ./plan.tmp
