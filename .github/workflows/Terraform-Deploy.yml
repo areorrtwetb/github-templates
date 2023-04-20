@@ -8,6 +8,10 @@ on:
         description: Mode to invoke Terraform
         type: string
 
+      environment:
+        description: Environment to target
+        type: string
+
 jobs:
   Identify-Environments:
     runs-on: ubuntu-latest
