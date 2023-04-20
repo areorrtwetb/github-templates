@@ -19,7 +19,7 @@ jobs:
 
     steps:
       -   name: Ensure Terraform apply is only targeting a named environment
-          if: inputs.environment == ''
+          if: inputs.terraform_mode == 'apply' && inputs.environment == ''
           uses: actions/github-script@v6
           with:
             script: |
