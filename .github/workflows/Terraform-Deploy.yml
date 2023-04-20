@@ -128,7 +128,6 @@ jobs:
             ${{ inputs.extra_env_vars }}
             EOF_${{ github.sha }}
 
-
       -   name: Check for environment folder
           shell: bash
           run: |
@@ -141,7 +140,6 @@ jobs:
             echo '${{ matrix.deployment_environment }} exists=${{ env.env_folder_exists }}'
 
       -   name: Validate Environment
-          if: inputs.terraform_mode == 'apply'
           shell: bash
           run: |
             # Convert to multi line and strip json square brackets and commas...
