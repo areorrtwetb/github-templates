@@ -9,6 +9,101 @@ on:
         type: string
 
 jobs:
+  Identify-Environments:
+    runs-on: ubuntu-latest
+
+    outputs:
+      environments_all: ${{ steps.environments.outputs.environments_all }}
+      # If we are running an apply this will be a single environment
+      matrix_environments: ${{ steps.matrix.outputs.matrix_environments }}
+
+    steps:
+      -   name: Ensure Terraform apply is only targeting a named environment
+          if: inputs.terraform_mode == 'apply' && inputs.environment == ''
+          uses: actions/github-script@v6
+          with:
+            script: |
+              core.setFailed('Foot protection has been triggered.  Unwilling to run a Terraform apply against multiple environments')
+
+      -   name: Checkout Repository
+          uses: actions/checkout@main
+
+      -   name: Request environments data
+          id: raw_environments
+          shell: bash
+          run: |
+            # GitHub have implemented their HEREDOC process using shell and JavaScript.
+            # 
+            # GITHUB_OUTPUT is a key+value pair file with support for HEREDOC, eg
+            #
+            # key+value format:
+            #
+            # key=value
+            # key2=value2
+            #
+            # HEREDOC format
+            #
+            # json<<EOF
+            # {
+            #   "data": [1,2,3,4]
+            # }
+            # EOF
+            #
+            # There HEREDOC in shell would be as follows:
+            #
+            # json=$( cat blob.json )
+            #
+            # Using an EOF (aka HEREDOC) has the benefit of allowing input without worrying about
+            # quoting or escaping correctly
+            (
+              echo "json<<GITHUB_EOF"
+              curl -s \
+                --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+                --header 'content-type: application/json' \
+                --url https://api.github.com/repos/${{ github.repository }}/environments
+              echo 'GITHUB_EOF'
+            ) >>$GITHUB_OUTPUT
+
+      -   name: Create environments list
+          id: environments
+          shell: bash
+          run: |
+            # Indentation of JSON and EOF is correct for shell command
+            (
+              echo "environments_all<<GITHUB_EOF"
+              jq -c '[ .environments[] | .name]' <<'EOF'
+            ${{ steps.raw_environments.outputs.json }}
+            EOF
+              echo 'GITHUB_EOF'
+            ) >>$GITHUB_OUTPUT
+            
+            (
+              echo "environments_without_approval<<GITHUB_EOF"
+              jq -c '[ .environments[] | select(.name | endswith("-approval") | not).name]' <<'EOF'
+            ${{ steps.raw_environments.outputs.json }}
+            EOF
+              echo 'GITHUB_EOF'
+            ) >>$GITHUB_OUTPUT
+
+      -   name: Set matrix environment(s)
+          id: matrix
+          shell: bash
+          run: |
+            # Indentation of JSON and EOF is correct for shell command
+            (
+              echo 'matrix_environments<<GITHUB_EOF'
+              if [ x'${{ inputs.terraform_mode }}' = x'plan' -a -z '${{ inputs.environment }}' ]; then
+                cat <<EOF
+            ${{ steps.environments.outputs.environments_without_approval }}
+            EOF
+              else
+                cat <<EOF
+            [ "${{ inputs.environment }}" ]
+            EOF
+              fi
+              echo 'GITHUB_EOF'
+            ) >>$GITHUB_OUTPUT
+
   Terraform:
     runs-on: ubuntu-latest
 
