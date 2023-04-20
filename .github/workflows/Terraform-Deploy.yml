@@ -106,10 +106,55 @@ jobs:
 
   Terraform:
     runs-on: ubuntu-latest
+    needs: Identify-Environments
+
+    strategy:
+      fail-fast: false
+      matrix:
+        deploy_environment: ${{ fromJSON(needs.Identify-Environments.outputs.matrix_environments) }}
+
+    environment:
+      name: ${{ matrix.deploy_environment }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@main
+
+      -   name: Populate environmental variables
+          if: inputs.extra_env_vars != ''
+          shell: bash
+          run: |
+            cat <<'EOF_${{ github.sha }}' >>$GITHUB_ENV
+            ${{ inputs.extra_env_vars }}
+            EOF_${{ github.sha }}
+
+
+      -   name: Check for environment folder
+          shell: bash
+          run: |
+            test -d '${{ matrix.deploy_environment }}' && dir_result=true || dir_result=false
+            echo "env_folder_exists=$dir_result" >> $GITHUB_ENV
+
+      -   name: Environment status
+          shell: bash
+          run: |
+            echo '${{ matrix.deployment_environment }} exists=${{ env.env_folder_exists }}'
+
+      -   name: Validate Environment
+          if: inputs.terraform_mode == 'apply'
+          shell: bash
+          run: |
+            # Convert to multi line and strip json square brackets and commas...
+            env_list=$(echo ${{ needs.Identify-Environments.outputs.environments_all }} | sed -re 's/,/\n/g' -e 's/[][]*//g')
+            
+            # If our env doesn't have an -approval suffix AND
+            # our env doesn't have an -approval env available we continue 
+            if echo "$env_list" | grep -qE '^${{ inputs.environment }}-approval$' \
+              && echo '${{ inputs.environment }}' | grep -vqE '.*-approval$'; then
+            
+              echo 'Invalid environment specified, use ${{ inputs.environment }}-approval'
+              exit 1
+            fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
